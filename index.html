@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Birthday Surprise</title>
+  <style>
+    :root { --bg:#000; --pink:#ff3a6b; --text:#fff; }
+    html,body{height:100%}
+    body{
+      margin:0; background:var(--bg); color:var(--text);
+      font-family:"Poppins",system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+      overflow:hidden;
+      position:relative;
+    }
+
+    /* >>> Background photo only while typing <<< */
+    body.with-photo::before{
+      content:"";
+      position:fixed; inset:0;
+      background:
+        linear-gradient( to bottom, rgba(0,0,0,.45), rgba(0,0,0,.65) ),
+        url("her.jpg") center / cover no-repeat; /* <- put your image name */
+      z-index:0;
+    }
+
+    /* LETTER (first screen) */
+    #letter{
+      position:relative; z-index:3;    /* above the photo overlay */
+      max-width:900px; height:80vh;
+      margin:40px auto; padding:24px; box-sizing:border-box;
+      line-height:1.65;
+      font-size:clamp(15px,2.6vw,18px);
+      white-space:pre-wrap; overflow-y:auto;
+      text-shadow:0 0 6px #ffffff44;
+    }
+    #letter::-webkit-scrollbar{width:8px;}
+    #letter::-webkit-scrollbar-thumb{background:#ffffff33;border-radius:6px;}
+
+    /* HEART STAGE */
+    #pinkboard{ position:fixed; inset:0; width:100%; height:100%; display:none; z-index:0; }
+    .message{ position:fixed; inset:0; display:none; z-index:2; pointer-events:none; }
+    .message__box{
+      position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+      text-align:center; max-width:80vw; line-height:1.2; opacity:0; transition:opacity 1.8s ease;
+    }
+    .message h1{
+      margin:0 0 10px; font-weight:800; color:#ff3366;
+      font-size:clamp(22px,7vw,46px);
+      text-shadow:0 0 8px #ff3366,0 0 18px #ff6699,0 0 32px #ff99cc;
+    }
+    .message p{
+      margin:0; font-size:clamp(12px,4vw,20px);
+      text-shadow:0 0 6px #ffffff66,0 0 14px #ffffff33;
+    }
+  </style>
+</head>
+<body class="with-photo"><!-- photo shows while typing -->
+
+  <!-- 1) Letter that types first -->
+  <div id="letter"></div>
+
+  <!-- 2) Heart + message (shown after typing) -->
+  <canvas id="pinkboard"></canvas>
+  <div class="message" id="heartMessage">
+    <div class="message__box" id="msgBox">
+      <h1>Happy Birthday My Love ❤️</h1>
+      <p>Forever you &amp; me — 21st August 💕</p>
+    </div>
+  </div>
+
+  <script>
+  /* ========= 1) TYPEWRITER (auto-scroll) ========= */
+  const letterText = `
+My Love,
+
+Happy Birthday to us ❤️. Every 21st of August will always be more than just a date on the calendar — it’s the day the world gave birth to two souls destined to find each other. Sometimes I feel like God planned it perfectly: you and I, same day, same month, same destiny.
+
+Sharing my birthday with you is the greatest gift I could ever ask for. Instead of just celebrating me, I get to celebrate us. Four years together has taught me that love isn’t only about the big moments, but also about the little things — the laughter, the late-night talks, the support, and the way we keep choosing each other every single day.
+
+Today, as we blow out our candles, I don’t just make a wish for myself — I wish for us:
+✨ More years of love and growth together
+✨ More adventures, laughter, and beautiful memories
+✨ Strength to keep holding onto each other no matter what life brings
+
+Baby, thank you for being my greatest blessing. You make my world brighter, my heart softer, and my life sweeter. I pray that this new year brings us closer to the dreams we’ve whispered to each other, and fills our hearts with even more love than we’ve ever known.
+
+So, Happy Birthday to the both of us 🥂. Same day, same love, same forever.
+I love you endlessly.
+
+Forever Yours,
+Your King ❤️🎂
+`;
+
+  const letterDiv = document.getElementById('letter');
+  let idx = 0;
+  function type() {
+    if (idx < letterText.length) {
+      const ch = letterText.charAt(idx);
+      letterDiv.innerHTML += (ch === '\n') ? '<br>' : ch;
+      idx++;
+      letterDiv.scrollTop = letterDiv.scrollHeight;      // auto-scroll
+      setTimeout(type, 28);                               // typing speed
+    } else {
+      setTimeout(showHeart, 900);
+    }
+  }
+  type();
+
+  /* ========= 2) PARTICLE HEART (auto-centered, heartbeat) ========= */
+  function showHeart(){
+    // remove background photo, reveal heart
+    document.body.classList.remove('with-photo');
+    document.getElementById('letter').style.display = 'none';
+    document.getElementById('pinkboard').style.display = 'block';
+    const heartMsg = document.getElementById('heartMessage');
+    heartMsg.style.display = 'block';
+    requestAnimationFrame(() => { document.getElementById('msgBox').style.opacity = 1; });
+    startHeart();
+  }
+
+  function startHeart(){
+    const canvas = document.getElementById('pinkboard');
+    const ctx = canvas.getContext('2d');
+
+    // ---- tuning ----
+    const PARTICLE_COUNT = 900;
+    const PARTICLE_SIZE  = 2.4;
+    const TRAIL_FADE     = 0.20;
+    const SPEED_TO_TARGET= 0.045;
+    const DAMPING        = 0.88;
+    const HEART_BEATS_PER_SEC = 1.05;
+    const HEART_BEAT_STRENGTH = 0.10;
+    const COLOR = "#ff3a6b";
+
+    function resize() {
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      const w = canvas.clientWidth = window.innerWidth;
+      const h = canvas.clientHeight = window.innerHeight;
+      canvas.width  = Math.floor(w * dpr);
+      canvas.height = Math.floor(h * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      layout();
+    }
+    window.addEventListener('resize', resize);
+
+    function heartCurve(t){
+      const x = 16 * Math.pow(Math.sin(t), 3);
+      const y = 13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t);
+      return { x, y: -y };
+    }
+
+    let targets = [], particles = [], baseScale = 1, center = {x:0,y:0};
+
+    function layout(){
+      const w = canvas.clientWidth, h = canvas.clientHeight;
+      center.x = w/2; center.y = h/2;
+
+      // heart size relative to small side (keeps full heart + message visible)
+      const minSide = Math.min(w, h);
+      baseScale = (minSide * 0.62) / 32;
+
+      targets = new Array(PARTICLE_COUNT).fill(0).map((_, i) => {
+        const t = (i / PARTICLE_COUNT) * Math.PI * 2;
+        const p = heartCurve(t);
+        return { x:p.x, y:p.y };
+      });
+
+      particles = targets.map(p => ({
+        x: center.x + p.x * baseScale + (Math.random()-0.5)*120,
+        y: center.y + p.y * baseScale + (Math.random()-0.5)*120,
+        vx:0, vy:0, i: Math.floor(Math.random()*targets.length)
+      }));
+    }
+    resize();
+
+    let t0 = performance.now();
+    function frame(tNow){
+      const w = canvas.clientWidth, h = canvas.clientHeight;
+
+      ctx.fillStyle = `rgba(0,0,0,${TRAIL_FADE})`;
+      ctx.fillRect(0,0,w,h);
+
+      const dt = (tNow - t0) / 1000;
+      const beat = Math.pow(Math.sin(dt * Math.PI * 2 * HEART_BEATS_PER_SEC), 4);
+      const scale = baseScale * (1 + HEART_BEAT_STRENGTH * beat);
+
+      ctx.fillStyle = COLOR;
+      ctx.beginPath();
+
+      for (const p of particles){
+        const tgt = targets[p.i];
+        const tx = center.x + tgt.x * scale;
+        const ty = center.y + tgt.y * scale;
+
+        p.vx = (p.vx + (tx - p.x) * SPEED_TO_TARGET) * DAMPING;
+        p.vy = (p.vy + (ty - p.y) * SPEED_TO_TARGET) * DAMPING;
+        p.x += p.vx; p.y += p.vy;
+
+        ctx.moveTo(p.x + PARTICLE_SIZE, p.y);
+        ctx.arc(p.x, p.y, PARTICLE_SIZE, 0, Math.PI*2);
+      }
+      ctx.fill();
+
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.shadowBlur = 18 + 60 * beat;
+      ctx.shadowColor = COLOR;
+      ctx.fill();
+      ctx.restore();
+
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  }
+  </script>
+</body>
+</html>
